@@ -1,0 +1,52 @@
+{
+  "mysql": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "test",
+    "password": "test",
+    "database": "test",
+    "acquireTimeout": "10000",
+    "waitForConnections": true,
+    "connectionLimit": 10,
+    "queueLimit": 10000
+  },
+  "loginCallback": {
+    "success": "",
+    "error": ""
+  },
+  "whiteips": [
+    "127.0.0.1"
+  ],
+  "nos": {
+    "urlPath": "",
+    "accessKey": "",
+    "secretKey": "",
+    "bucket": ""
+  },
+  "icp": {
+    "ISPID": 1,
+    "PASSWORD": "",
+    "KEY": "",
+    "OFFSET": "",
+    "SEQ": 1,
+    "USERNAME": "",
+    "HASHALGORITHM": 0,
+    "ENCRYPTALGORITHM": 0,
+    "COMPRESSIONFORMAT": 0,
+    "REPORT_URL": "",
+    "QUERY_URL": "",
+    "VERIFY_URL": "",
+    "QUERY": 1
+  },
+  "tenantpubips": {
+    "urlPath": "",
+    "secret": ""
+  },
+  "resources": {
+    "static": ""
+  },
+  "openapi-c": {
+    "app_key": "",
+    "app_secret": ""
+  }
+}

@@ -1,0 +1,450 @@
+---
+layout: default
+title: Profiles
+permalink: /workflow_practice/
+redirect_from:
+  - /workflow_practice.html
+sitemap:
+    priority: 0.7
+    lastmod: 2014-11-26T00:00:00-00:00
+---
+
+<h1><i class="fa fa-group"></i> Workflow Practice</h1>
+
+
+<h2> CAR workflow </h2>
+
+"CAR" is a combination of the first letters of three words "Commit as Release".
+It means that when you commit according to customized format like "release:*.*.*:[0|1]:comment", it will auto-trigger the CI/CD flow.
+
+<ul>
+    <p>the log format</p>
+    <li>action  label: release </li>
+    <li>*.*.*: version </li>
+    <li>[0|1]: meanless now </li>
+    <li>comment: normal log message</li>
+</ul>
+
+<br>
+<br>
+<img src="{{ site.url }}/images/icp_division_of_labor.png" width="600"/>
+<br>
+<br>
+
+
+<h2> Example workflow </h2>
+
+<br>
+<br>
+<img src="{{ site.url }}/images/icp_car_workflow.png" width="600"/>
+<br>
+<br>
+
+
+<h2>Jenkins pipeline: icp_deploy_test</h2>
+
+<ul>
+    <li>
+        <p>General tab</p>
+        <p>project name: icp_deploy_test</p>
+    </li>
+    <li>
+        <p>Source Manager tab</p>
+        <p>Git: https://github.com/easynode/easynode-ipc.git branch: master</p>
+    </li>
+    <li>
+        <p>Build Trigger tab</p>
+        <p>Select the option: Build when a change is pushed to GitHub</p>
+    </li>
+    <li>
+        <p>Build Execute shell</p>
+<pre>
+<code>
+#!/bin/bash
+
+msg=$(git log --pretty=format:"%s" -1)
+action=`echo $msg|awk -F':' '{print $1}'`
+version=`echo $msg|awk -F':' '{print $2}'`
+
+if [ -f plugins/version.txt ]; then
+    rm plugins/version.txt
+fi
+
+echo $version >> plugins/version.txt
+
+if [ -f property.txt ]; then
+    echo "delete property.txt file"
+    rm property.txt
+fi
+
+echo "version=$version" > property.txt
+
+if [ $action = 'release' ]; then
+    echo remove old container  named icp
+    id=`docker ps -a -f name=icp  --format {{.ID}}`
+
+    if [ -z $id ]; then
+        echo 'the icp2 container does not exists'
+    else
+        docker rm -f $id
+        echo find the id and rm  it
+    fi
+
+    echo now is building the $version
+    docker build -t hub.c.163.com/hujb2000/icp:$version .
+
+    echo now is running as daemon
+    nohup docker run -d --name icp -p 8900:8900 -e CONFIG_URL="http://apollodev.nos.netease.com/1464269273860configT.enod" -e PORT=8900 -e ENV=TEST hub.c.163.com/hujb2000/icp:$version
+
+    echo $?
+
+    echo now is testing @version
+    docker exec icp  /bin/bash /usr/src/app/test.sh
+else
+    echo 'common commit,do not need to build'
+    exit 1
+fi
+</code>
+</pre>
+        <li>
+            <p>Inject environment variables</p>
+            <p>Properties File Path: property.txt</p>
+        </li>
+    </li>
+
+    <li>
+        <p>Operation after building</p>
+        <p>Projects to build: icp_test_test</p>
+    </li>
+</ul>
+
+<h2>Jenkins pipeline: icp_test_test</h2>
+<ul>
+    <li>
+        <p>General tab</p>
+        <p>project name: icp_test_test</p>
+    </li>
+    <li>
+        <p>Source Manager tab</p>
+        <p>Git: http://****/root/icp_test.git branch: master</p>
+    </li>
+    <li>
+        <p>Build Trigger tab</p>
+        <p>Select the option: Build when a change is pushed to GitHub</p>
+    </li>
+    <li>
+        <p>Build Execute shell</p>
+<pre>
+<code>
+    #!/bin/bash
+
+    while true
+    do
+        echo $version
+
+        gversion=`curl http://127.0.0.1:8899/version.txt`
+
+        echo $gversion
+
+        if [ $gversion = $version ]; then
+            echo equal
+            break;
+        else
+            echo not equal
+        fi
+            sleep 2
+    done
+
+    python add_new_web_site_test.py
+    echo $?
+
+    ab -n 100 -c 100 http://127.0.0.1:8899/index.html
+    echo ok
+</code>
+</pre>
+    </li>
+
+    <li>
+        <p>Operation after building</p>
+        <p>
+            Trigger parameterized build on other projects
+            <p>
+                Build Triggers
+                <p>Projects to build :  icp_deploy_prod </p>
+                <p>Predefined parameters->Parameters:  version=${version} </p>
+            </p>
+        </p>
+    </li>
+</ul>
+
+<h2>Jenkins pipeline: icp_deploy_prod</h2>
+
+<ul>
+    <li>
+        <p>General tab</p>
+        <p>project name: icp_deploy_prod</p>
+    </li>
+    <li>
+        <p>Source Manager tab</p>
+        <p>Git: https://github.com/easynode/easynode-ipc.git branch: master</p>
+    </li>
+    <li>
+        <p>Build Trigger tab</p>
+        <p>Select the option: Build when a change is pushed to GitHub</p>
+    </li>
+    <li>
+        <p>Build Execute shell</p>
+<pre>
+<code>
+    #!/bin/bash
+
+    msg=$(git log --pretty=format:"%s" -1)
+    action=`echo $msg|awk -F':' '{print $1}'`
+    version=`echo $msg|awk -F':' '{print $2}'`
+
+    if [ -f plugins/version.txt ]; then
+        rm plugins/version.txt
+    fi
+
+    echo $version >> plugins/version.txt
+
+    if [ -f property.txt ]; then
+        echo "delete property.txt file"
+        rm property.txt
+    fi
+
+    echo "version=$version" > property.txt
+
+    if [ $action = 'release' ]; then
+        echo now is pushing the $version
+        docker push hub.c.163.com/hujb2000/icp:$version
+        sleep 2
+        echo restart icp
+        curl https://open.c.163.com/api/v1/hooks/app/token
+    else
+        echo 'common commit,do not need to build'
+    fi
+</code>
+</pre>
+    </li>
+    <li>
+        <p>Inject environment variables</p>
+        <p>Properties File Path: property.txt</p>
+    </li>
+
+    <li>
+        <p>Operation after building</p>
+        <p>
+            Trigger parameterized build on other projects
+        <p>
+            Build Triggers
+        <p>Projects to build :  icp_testy_prod </p>
+        <p>Predefined parameters->Parameters:  version=${version} </p>
+        </p>
+        </p>
+    </li>
+</ul>
+
+
+<h2>Jenkins pipeline: icp_test_prod</h2>
+
+
+<ul>
+    <li>
+        <p>General tab</p>
+        <p>project name: icp_test_prod</p>
+        <p>Restrict where this project can be run, label Expression: hjbmac</p>
+    </li>
+    <li>
+        <p>Source Manager tab</p>
+        <p>Git: http://****/root/icp_test.git branch: master</p>
+    </li>
+    <li>
+        <p>Build Trigger tab</p>
+        <p>Select the option: Build when a change is pushed to GitHub</p>
+    </li>
+    <li>
+        <p>Build Execute shell</p>
+<pre>
+<code>
+#!/bin/bash
+
+while true
+    do
+        echo $version
+
+        gversion=`curl http://127.0.0.1:8899/version.txt`
+        echo $?
+        echo $gversion
+        if [ $gversion = $version ]; then
+            echo equal
+            break;
+        else
+            echo not equal
+        fi
+            sleep 30
+done
+
+echo issue static resouce for build directory
+curl -d "version=0.0.5&localurl=/usr/src/app/plugins/build" "http://127.0.0.1:8899/admin/resources"
+
+    echo issue static resource for assets directory
+curl -d "version=0.0.5&localurl=/usr/src/app/plugins/assets" "http://127.0.0.1:8899/admin/resources"
+
+sleep 20
+
+python add_new_web_site_prod.py
+echo $?
+
+ab -n 100 -c 100 http://127.0.0.1:8899/index.html
+echo ok
+</code>
+</pre>
+    </li>
+
+    <li>
+        <p>Operation after building</p>
+        <p>
+            Editable Email Notification
+        <p>
+    </li>
+</ul>
+
+
+<h2> EasyNode workflow</h2>
+
+<br>
+<br>
+<img src="{{ site.url }}/images/easynode_car_workflow.png" width="600"/>
+<br>
+<br>
+
+
+<h2>Jenkins pipeline:  easynode_pkg_issue </h2>
+
+
+<ul>
+    <li>
+        <p>General tab</p>
+        <p>project name: easynode_pkg_issue</p>
+    </li>
+    <li>
+        <p>Source Manager tab</p>
+        <p>Git: https://github.com/easynode/easynode.git branch: master</p>
+    </li>
+    <li>
+        <p>Build Trigger tab</p>
+        <p>Select the option: Build when a change is pushed to GitHub</p>
+    </li>
+    <li>
+        <p>Build Execute shell</p>
+<pre>
+<code>
+    #!/bin/bash
+
+    msg=$(git log --pretty=format:"%s" -1)
+    action=`echo $msg|awk -F':' '{print $1}'`
+    oldversion=`echo $msg|awk -F':' '{print $2}'`
+    version=`echo $msg|awk -F':' '{print $3}'`
+
+    if [ -f plugins/version.txt ]; then
+        rm plugins/version.txt
+    fi
+
+    echo $version >> plugins/version.txt
+
+    if [ -f property.txt ]; then
+        echo "delete property.txt file"
+        rm property.txt
+    fi
+
+    echo "oldversion=$oldversion" > property.txt
+    echo "version=$version" > property.txt
+
+    if [ $action = 'release' ]; then
+        echo npm install
+        npm install
+
+        echo genenate lib directory by babel
+        babel src -d lib
+
+        echo increase package version
+        sed -i -e 's|"version": '\"`echo $oldversion`\"'|"version": '\"`echo $version`\"'|' package.json
+
+        echo commit
+        git config --global push.default simple
+        git push origin HEAD:master
+
+        echo npm publish
+        npm publish
+    else
+        echo 'common commit,do not need to build'
+    fi
+</code>
+</pre>
+    </li>
+
+    <li>
+        <p>Operation after building</p>
+        <li>
+            <p>Trigger parameterized build on other projects</p>
+            <p>Projects to build: icp_easynode_publish_image</p>
+        </li>
+        <li>
+            <p>Predefined paramaters</p>
+            <p>Parameters:</p>
+                <code>
+                oldversion=${oldversion}
+                version=${version}
+                </code>
+        </li>
+    </li>
+</ul>
+
+
+<h2> Jenkins pipeline: easynode_publish_image </h2>
+
+<ul>
+    <li>
+        <p>General tab</p>
+        <p>project name: easynode_publish_image</p>
+    </li>
+    <li>
+        <p>Source Manager tab</p>
+        <p>Git: https://github.com/easynode/easynode-docker.git branch: master</p>
+    </li>
+    <li>
+        <p>Build Trigger tab</p>
+        <p>Select the option: Build when a change is pushed to GitHub</p>
+    </li>
+    <li>
+        <p>Build Execute shell</p>
+<pre>
+<code>
+    #!/bin/bash
+
+    echo $version
+    echo $oldversion
+
+    easynode_version=6.2.0
+    dockerfile_path=v$easynode_version/Dockerfile
+    package_path=v$easynode_version/package.json
+    imgname=hujb2000/easynode:$easynode_version
+
+    echo updatae easynode package version
+    sed -i -e 's|"easynode": '\"`echo ~$oldversion`\"'|"easynode": '\"`echo ~$version`\"'|' $package_path
+
+    cat $package_path
+
+    echo start building docker image: $imgname
+    docker build -f $dockerfile_path -t $imgname .
+
+    echo start pushing docker image: $imgname
+    docker push $imgname
+
+    echo commit
+    git config --global push.default simple
+    git push origin HEAD:master
+</code>
+</pre>
+</ul>
